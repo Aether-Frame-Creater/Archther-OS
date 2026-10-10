@@ -1,7 +1,10 @@
 -- Core behaviour: general, layout, decoration, misc, input, gesture, device.
 -- Migrated verbatim from the stock configuration (values, comments, and the
--- example device stanza preserved as-is).
+-- example device stanza preserved as-is), except window-border colors, which
+-- now come from the central Archther Dark theme module.
 -- Refer to https://wiki.hypr.land/Configuring/Basics/Variables/
+
+local theme = require("themes.archther")
 
 hl.config({
     general = {
@@ -11,8 +14,8 @@ hl.config({
         border_size = 2,
 
         col = {
-            active_border   = { colors = {"rgba(33ccffee)", "rgba(00ff99ee)"}, angle = 45 },
-            inactive_border = "rgba(595959aa)",
+            active_border   = theme.hypr.active_border,
+            inactive_border = theme.hypr.inactive_border,
         },
 
         -- Set to true to enable resizing windows by clicking and dragging on borders and gaps
