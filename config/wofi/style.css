@@ -1,0 +1,53 @@
+/* Archther Dark — Wofi launcher theme (GTK3, Wofi 1.5.x).
+ *
+ * Palette reference: config/hypr/themes/archther.lua (canonical tokens).
+ * Selectors used are the widget names documented in wofi(7) WIDGET LAYOUT
+ * for the installed version: #window, #outer-box, #input, #scroll,
+ * #inner-box, #entry, #entry:selected. Text inside entries inherits color
+ * from #entry / #entry:selected. Spacing and radius follow context/ui-tokens.md
+ * (standard 12px padding, 8px control radius).
+ * Geometry (width/height) is intentionally left at Wofi defaults (50%x40%);
+ * no separate config file is required, so `wofi --show drun` is unchanged.
+ */
+
+#window {
+    background-color: #0B0F14;
+    border: 2px solid #0B2A6F;
+    border-radius: 12px;
+}
+
+#outer-box {
+    margin: 12px;
+    background-color: transparent;
+}
+
+#input {
+    background-color: #172033;
+    color: #F8FAFC;
+    border: 1px solid #334155;
+    border-radius: 8px;
+    padding: 8px 12px;
+    margin-bottom: 12px;
+}
+
+#scroll {
+    background-color: transparent;
+}
+
+#inner-box {
+    background-color: transparent;
+}
+
+#entry {
+    background-color: transparent;
+    color: #CBD5E1;
+    border: 1px solid transparent;
+    border-radius: 8px;
+    padding: 8px 12px;
+}
+
+#entry:selected {
+    background-color: #0B2A6F;
+    color: #F8FAFC;
+    border: 1px solid #E8A11C;
+}
