@@ -10,7 +10,7 @@ M.mainMod = "SUPER" -- Sets "Windows" key as main modifier
 
 -- Set programs that you use
 M.terminal    = "kitty"
-M.fileManager = "dolphin"
+M.fileManager = "nautilus"
 
 -- Application launcher. Stock config used "hyprlauncher", which is not
 -- installed; Wofi is the Archther launcher (verified: /usr/bin/wofi v1.5.3,
