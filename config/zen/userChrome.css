@@ -1,0 +1,90 @@
+/* Archther Dark — Zen Browser chrome theme.
+ *
+ * Palette reference: config/hypr/themes/archther.lua (canonical tokens).
+ * Scope: browser CHROME ONLY (userChrome.css never touches website content).
+ * Rules are color/background/border only — no layout, sizing, or feature
+ * changes — using stable Firefox chrome selectors. Zen-specific internal
+ * elements (vertical-tab strip, workspaces) are deliberately NOT targeted:
+ * their selectors are undocumented and unverified, so coverage there must
+ * be confirmed visually by the user (see docs/ARCHTHER-ZEN-DOLPHIN-THEME.md).
+ * Activation requires toolkit.legacyUserProfileCustomizations.stylesheets
+ * (see doc); this file alone changes nothing until the user enables it.
+ */
+
+:root {
+  --archther-navy: #0B2A6F;
+  --archther-gold: #E8A11C;
+  --archther-bg: #0B0F14;
+  --archther-cyan: #38BDF8;
+  --archther-fg: #F8FAFC;
+  --archther-fg-dim: #CBD5E1;
+  --archther-surface: #111827;
+}
+
+/* Toolbar / navigation area */
+#navigator-toolbox {
+  background-color: var(--archther-bg) !important;
+  border-bottom: 1px solid var(--archther-navy) !important;
+}
+
+/* Tabs: transparent idle, navy+gold selected, navy wash on hover */
+.tabbrowser-tab .tab-background {
+  background-color: transparent !important;
+  border: 1px solid transparent !important;
+  border-radius: 8px !important;
+}
+
+.tabbrowser-tab[selected] .tab-background {
+  background-color: var(--archther-navy) !important;
+  border-color: var(--archther-gold) !important;
+}
+
+.tabbrowser-tab:hover:not([selected]) .tab-background {
+  background-color: rgba(11, 42, 111, 0.55) !important;
+}
+
+.tabbrowser-tab[selected] .tab-label {
+  color: var(--archther-fg) !important;
+}
+
+.tabbrowser-tab:not([selected]) .tab-label {
+  color: var(--archther-fg-dim) !important;
+}
+
+/* Address / search bar */
+#urlbar-background {
+  background-color: var(--archther-surface) !important;
+  border: 1px solid var(--archther-navy) !important;
+  border-radius: 8px !important;
+}
+
+#urlbar:focus-within #urlbar-background {
+  border-color: var(--archther-gold) !important;
+}
+
+#urlbar {
+  color: var(--archther-fg) !important;
+}
+
+/* Menus and popup surfaces */
+menupopup,
+panel {
+  background-color: var(--archther-bg) !important;
+  color: var(--archther-fg) !important;
+  border: 1px solid var(--archther-navy) !important;
+}
+
+menuitem:hover,
+menu:hover {
+  background-color: var(--archther-navy) !important;
+  color: var(--archther-fg) !important;
+}
+
+/* Separators and focus */
+toolbarseparator {
+  border-color: var(--archther-navy) !important;
+}
+
+:focus-visible {
+  outline-color: var(--archther-cyan) !important;
+}
