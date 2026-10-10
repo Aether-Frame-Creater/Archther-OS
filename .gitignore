@@ -1,0 +1,22 @@
+# Local-only OpenCode context
+/context/
+
+# Secrets and credentials - never commit these
+.env
+.env.*
+*.key
+*.pem
+secrets/
+
+# Editor and OS artifacts
+*~
+.DS_Store
+
+# Local state, logs, caches, and generated output
+*.log
+.cache/
+tmp/
+
+# Manual config backups - keep recoverable copies outside Git
+*.bak
+*.orig
