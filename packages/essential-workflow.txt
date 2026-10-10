@@ -1,0 +1,24 @@
+# Essential workflow dependencies — Archther OS
+#
+# Package names (not executables) required by the active keybindings in
+# config/hypr/modules/keybindings.lua and the launcher workflow.
+# Verified on Arch Linux 2026-10-10. Install missing entries with:
+#   sudo pacman -S --needed $(grep -vE '^\s*(#|$)' packages/essential-workflow.txt | grep -v '^aur/')
+# AUR entries (marked below) need yay instead; no AUR automation here.
+#
+# --- Official repositories (extra / core) — mandatory helpers ---
+hyprland        # compositor + hyprctl (bind fallback, reload, queries)
+kitty           # terminal (SUPER+Q; Wofi-launched)
+wofi            # application launcher (SUPER+R, --show drun)
+dunst           # notifications (systemd user service)
+dolphin         # file manager (SUPER+E)
+grim            # screenshot capture (unbound; pair with slurp manually)
+slurp           # region selection for grim (unbound)
+wireplumber     # provides wpctl (volume/mute binds)
+pipewire        # audio routing under wireplumber session
+brightnessctl   # backlight control (brightness binds; needs a writable
+                # backlight node — see docs/ESSENTIAL-WORKFLOW.md)
+playerctl       # MPRIS media control (media binds; needs a running player)
+#
+# --- AUR — optional application ---
+# zen-browser-bin  # browser (unbound; launch via Wofi drun)
