@@ -1,0 +1,44 @@
+#!/usr/bin/env bash
+#
+# archther-screenshot-full — capture the full desktop output.
+# Uses grim according to its documented behavior.
+#
+# Usage: archther-screenshot-full
+# Output directory: ${XDG_PICTURES_DIR:-$HOME/Pictures}/Screenshots
+
+set -Eeuo pipefail
+
+out_dir_default="${HOME:-}/Pictures"
+[ -n "${HOME:-}" ] || { printf 'archther-screenshot-full: HOME is not set\n' >&2; exit 1; }
+out_dir="${XDG_PICTURES_DIR:-$out_dir_default}/Screenshots"
+
+die() {
+    printf 'archther-screenshot-full: %s\n' "$*" >&2
+    exit 1
+}
+
+notify() {
+    # Best-effort only: capture must work without a notification sender.
+    if command -v notify-send >/dev/null 2>&1; then
+        notify-send "$@" >/dev/null 2>&1 || true
+    fi
+}
+
+command -v grim >/dev/null 2>&1 || die "grim is not installed"
+
+mkdir -p "$out_dir" || die "cannot create $out_dir"
+
+stamp="$(date +%Y%m%d-%H%M%S)"
+file="$out_dir/full-$stamp.png"
+suffix=1
+while [ -e "$file" ]; do
+    suffix=$((suffix + 1))
+    file="$out_dir/full-$stamp-$suffix.png"
+done
+
+if grim "$file"; then
+    printf '%s\n' "$file"
+    notify "Screenshot saved" "$file"
+else
+    die "grim failed"
+fi

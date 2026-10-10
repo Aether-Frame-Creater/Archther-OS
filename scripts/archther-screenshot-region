@@ -1,0 +1,50 @@
+#!/usr/bin/env bash
+#
+# archther-screenshot-region — capture a user-selected screen region.
+# Uses slurp for selection and grim for capture. Cancellation (Esc) exits
+# quietly with status 0 and creates no file.
+#
+# Usage: archther-screenshot-region
+# Output directory: ${XDG_PICTURES_DIR:-$HOME/Pictures}/Screenshots
+
+set -Eeuo pipefail
+
+out_dir_default="${HOME:-}/Pictures"
+[ -n "${HOME:-}" ] || { printf 'archther-screenshot-region: HOME is not set\n' >&2; exit 1; }
+out_dir="${XDG_PICTURES_DIR:-$out_dir_default}/Screenshots"
+
+die() {
+    printf 'archther-screenshot-region: %s\n' "$*" >&2
+    exit 1
+}
+
+notify() {
+    # Best-effort only: capture must work without a notification sender.
+    if command -v notify-send >/dev/null 2>&1; then
+        notify-send "$@" >/dev/null 2>&1 || true
+    fi
+}
+
+command -v slurp >/dev/null 2>&1 || die "slurp is not installed"
+command -v grim >/dev/null 2>&1 || die "grim is not installed"
+
+mkdir -p "$out_dir" || die "cannot create $out_dir"
+
+# Slurp exits nonzero (and prints nothing) when the selection is cancelled.
+geometry="$(slurp 2>/dev/null)" || exit 0
+[ -n "$geometry" ] || exit 0
+
+stamp="$(date +%Y%m%d-%H%M%S)"
+file="$out_dir/region-$stamp.png"
+suffix=1
+while [ -e "$file" ]; do
+    suffix=$((suffix + 1))
+    file="$out_dir/region-$stamp-$suffix.png"
+done
+
+if grim -g "$geometry" "$file"; then
+    printf '%s\n' "$file"
+    notify "Screenshot saved" "$file"
+else
+    die "grim failed for geometry $geometry"
+fi
