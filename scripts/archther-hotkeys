@@ -1,0 +1,43 @@
+#!/usr/bin/env bash
+#
+# archther-hotkeys — open the Archther hotkey reference in a Kitty window.
+#
+# `less` is not installed on this system, so the document is displayed with
+# `cat` followed by an explicit "press Enter to close" prompt inside a
+# `--hold` Kitty window. This is the same reader used by the navigation menu,
+# so both entry points behave identically.
+#
+# Usage: archther-hotkeys
+# Document: ${XDG_DATA_HOME:-$HOME/.local/share}/doc/archther/ARCHTHER-HOTKEYS.md
+
+set -Eeuo pipefail
+
+prog_name="archther-hotkeys"
+
+die() {
+    printf '%s: %s\n' "$prog_name" "$*" >&2
+    exit 1
+}
+
+notify() {
+    # Best-effort only: the reference must open without a notification sender.
+    if command -v notify-send >/dev/null 2>&1; then
+        notify-send "$@" >/dev/null 2>&1 || true
+    fi
+}
+
+command -v kitty >/dev/null 2>&1 || die "kitty is not installed"
+
+data_home="${XDG_DATA_HOME:-${HOME:-}/.local/share}"
+[ -n "${HOME:-}" ] || die "HOME is not set"
+doc="$data_home/doc/archther/ARCHTHER-HOTKEYS.md"
+
+if [ ! -r "$doc" ]; then
+    printf '%s: hotkey reference not found at %s\n' "$prog_name" "$doc" >&2
+    notify "Archther" "Hotkey reference not installed"
+    exit 1
+fi
+
+# The document path is passed as "$1" so no path content is ever parsed as code.
+kitty --hold sh -c 'cat "$1"; printf "\nPress Enter to close this window."; read -r _' _ "$doc" \
+    >/dev/null 2>&1 || die "could not open a Kitty window"

@@ -1,0 +1,133 @@
+#!/usr/bin/env bash
+#
+# archther-menu — Archther navigation menu (SUPER+SPACE).
+#
+# Renders a fixed, explicit list of entries in Wofi's dmenu mode and maps the
+# returned line to one approved action. The menu never executes its own output:
+# every selection is matched against a literal case statement, and anything that
+# does not match exactly (including an empty selection or Escape/cancel) exits
+# without running anything. There is no eval and no "$SELECTION" expansion into
+# a shell.
+#
+# Wofi exit codes are not relied upon for safety: cancellation handling is done
+# by validating the selected string against the approved action list.
+#
+# Usage: archther-menu
+# Deployed to: ~/.local/bin/archther-menu
+
+set -Eeuo pipefail
+
+prog_name="archther-menu"
+
+die() {
+    printf '%s: %s\n' "$prog_name" "$*" >&2
+    exit 1
+}
+
+notify() {
+    # Best-effort only: the menu must work without a notification sender.
+    if command -v notify-send >/dev/null 2>&1; then
+        notify-send "$@" >/dev/null 2>&1 || true
+    fi
+}
+
+# Print a readable error for an action whose target is unavailable.
+report_unavailable() {
+    printf '%s: %s is not installed\n' "$prog_name" "$1" >&2
+    notify "Archther" "$1 is not installed"
+}
+
+require_cmd() {
+    command -v "$1" >/dev/null 2>&1 || report_unavailable "$1"
+}
+
+command -v wofi >/dev/null 2>&1 || die "wofi is not installed"
+
+# Menu entries are plain label text. No icons, no markup, no user-supplied data
+# ever reaches this list, so no escaping concerns exist here.
+menu_entries() {
+    printf '%s\n' \
+        "Applications" \
+        "Terminal" \
+        "Browser" \
+        "File Manager" \
+        "Region Screenshot" \
+        "Full Screenshot" \
+        "Hotkey Reference" \
+        "Exit"
+}
+
+# `--dmenu` reads entries from stdin and writes the chosen entry to stdout.
+# `--no-custom-entry` prevents the raw search text from being submitted, so an
+# unmatched query can never be interpreted as an action.
+selection="$(menu_entries | wofi --dmenu \
+    --prompt "Archther" \
+    --insensitive \
+    --no-custom-entry \
+    2>/dev/null)" || true
+
+# Cancellation (Escape) and an empty submission both arrive as an empty string.
+# Trim surrounding whitespace defensively; the entries themselves have none.
+selection="${selection#"${selection%%[![:space:]]*}"}"
+selection="${selection%"${selection##*[![:space:]]}"}"
+
+[ -n "$selection" ] || exit 0
+
+case "$selection" in
+    "Applications")
+        # Same launcher as SUPER+R; the menu offers it as a discoverable entry.
+        require_cmd wofi
+        wofi --show drun >/dev/null 2>&1 || notify "Archther" "Launcher closed"
+        ;;
+    "Terminal")
+        require_cmd kitty
+        kitty >/dev/null 2>&1 || notify "Archther" "Could not start Kitty"
+        ;;
+    "Browser")
+        # Zen Browser ships /usr/bin/zen-browser; `zen` is not on PATH here.
+        require_cmd zen-browser
+        zen-browser >/dev/null 2>&1 || notify "Archther" "Could not start Zen Browser"
+        ;;
+    "File Manager")
+        require_cmd nautilus
+        nautilus >/dev/null 2>&1 || notify "Archther" "Could not start Nautilus"
+        ;;
+    "Region Screenshot")
+        script="${HOME:-}/.local/bin/archther-screenshot-region"
+        if [ -x "$script" ]; then
+            "$script" || notify "Archther" "Region screenshot failed"
+        else
+            report_unavailable "archther-screenshot-region"
+        fi
+        ;;
+    "Full Screenshot")
+        script="${HOME:-}/.local/bin/archther-screenshot-full"
+        if [ -x "$script" ]; then
+            "$script" || notify "Archther" "Full screenshot failed"
+        else
+            report_unavailable "archther-screenshot-full"
+        fi
+        ;;
+    "Hotkey Reference")
+        # Same reader as SUPER+K, so both paths behave identically. The
+        # document path is resolved inside the script, never here, so this
+        # menu never needs to know where the reference is deployed.
+        reader="${HOME:-}/.local/bin/archther-hotkeys"
+        if [ -x "$reader" ]; then
+            "$reader" || notify "Archther" "Could not open the hotkey reference"
+        else
+            report_unavailable "archther-hotkeys"
+        fi
+        ;;
+    "Exit")
+        # Explicit, confirmed session exit. This is the only menu entry that
+        # ends the session, which is why it is a separate labelled action.
+        notify "Archther" "Logging out"
+        hyprctl dispatch exit >/dev/null 2>&1 || die "could not dispatch exit"
+        ;;
+    *)
+        # Unreachable for the entries above; treated as a cancellation so a
+        # future wofi behaviour change can never execute something unexpected.
+        exit 0
+        ;;
+esac
