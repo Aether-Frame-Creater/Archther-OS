@@ -1,0 +1,280 @@
+#!/usr/bin/env python3
+"""Cross-check docs/ARCHTHER-HOTKEYS.md against the live Hyprland bindings.
+
+The hotkey reference is only useful if it matches the running desktop, and a
+hand-written list drifts the moment a binding changes. This script reads the
+bindings the compositor actually has registered (via `hyprctl binds`) and checks
+that:
+
+  1. every binding registered in the compositor appears in the document;
+  2. no combination claimed in the document is absent from the compositor;
+  3. the compositor has no duplicate (modifier, key) pairs;
+  4. the document's stated total matches the real total.
+
+Ranges are expanded before comparison: the document writes `SUPER + 1..0` where
+the compositor has ten separate bindings.
+
+Usage:  archther-hotkey-check [path/to/ARCHTHER-HOTKEYS.md]
+
+Exits 0 when the document and the compositor agree, 1 otherwise.
+"""
+
+from __future__ import annotations
+
+import re
+import subprocess
+import sys
+from pathlib import Path
+
+# Modifier bits reported by `hyprctl binds` as `modmask`.
+# Verified empirically against the live 0.56.2 compositor: SUPER=64, SHIFT=1,
+# CTRL=4, ALT=8 (e.g. a SUPER+ALT+F bind reports 72, SUPER+CTRL+F reports 68).
+MOD_BITS = {64: "SUPER", 1: "SHIFT", 4: "CTRL", 8: "ALT"}
+
+# Keys the document writes as an abbreviated or friendlier form.
+KEY_ALIASES = {
+    "RETURN": "RETURN",
+    "EQUAL": "EQUAL",
+    "MINUS": "MINUS",
+    "GRAVE": "GRAVE",
+    "Print": "Print",
+    "LEFT MOUSE": "mouse:272",
+    "RIGHT MOUSE": "mouse:273",
+    "SCROLL DOWN": "mouse_down",
+    "SCROLL UP": "mouse_up",
+    "SHIFT + Print": "Print",
+}
+
+
+def compositor_bindings() -> list[tuple[str, str]]:
+    """Return [(modifiers, key)] exactly as the compositor reports them."""
+    out = subprocess.run(
+        ["hyprctl", "binds"], capture_output=True, text=True, check=True
+    ).stdout
+
+    binds: list[tuple[str, str]] = []
+    for block in out.split("\n\n"):
+        fields: dict[str, str] = {}
+        for line in block.splitlines():
+            line = line.strip()
+            if ":" in line:
+                name, _, value = line.partition(":")
+                fields[name.strip()] = value.strip()
+        if "key" not in fields or "dispatcher" not in fields:
+            continue
+        mask = int(fields.get("modmask", "0") or 0)
+        mods = [name for bit, name in MOD_BITS.items() if mask & bit]
+        # Keep a stable, readable modifier order.
+        order = {"SUPER": 0, "SHIFT": 1, "CTRL": 2, "ALT": 3}
+        mods.sort(key=lambda m: order.get(m, 9))
+        binds.append((" + ".join(mods), fields["key"]))
+    return binds
+
+
+def _row_cells(line: str) -> list[str]:
+    parts = line.split("|")
+    # Drop the empty strings a leading/trailing pipe produces.
+    return [c.strip() for c in parts[1:-1]] if len(parts) >= 3 else []
+
+
+def _is_separator(cells: list[str]) -> bool:
+    return bool(cells) and all(set(c) <= set("-: ") for c in cells if c)
+
+
+def _expand_range(token: str) -> list[str] | None:
+    """Expand `SUPER + 1..0` and `SUPER + SHIFT + 1..4` into concrete keys.
+
+    The wrapped form is the Hyprland convention: key 10 is the digit 0, so
+    `1..0` means workspaces 1 through 10, i.e. the digits 1..9 then 0.
+    """
+    m = re.match(r"^(.*?)(\d+)\.\.(\d+)(.*)$", token)
+    if not m:
+        return None
+    pre, lo, hi, post = m.groups()
+    lo_i, hi_i = int(lo), int(hi)
+    if lo_i <= hi_i:
+        numbers = list(range(lo_i, hi_i + 1))
+    else:
+        # Wrapped: 1..0 means 1,2,...,9 then 0.
+        numbers = list(range(lo_i, 10)) + [0]
+    return [f"{pre}{n % 10}{post}".strip() for n in numbers]
+
+
+def _expand_slashes(token: str) -> list[str]:
+    """Expand slash-joined alternatives into full shortcuts.
+
+    Handles both the plain form `SUPER + LEFT/RIGHT/UP/DOWN` and the
+    backticked form `` `SUPER + MINUS` / `SUPER + EQUAL` ``. Backticks are
+    removed first so the modifier prefix is visible, and the prefix is taken
+    from everything before the final slash group, so `SUPER + ALT + MINUS/EQUAL`
+    keeps both modifiers.
+    """
+    token = token.strip().strip("`").strip()
+    if "/" not in token:
+        return [token]
+
+    # Preferred form: a modifier prefix followed by a slash-joined key group.
+    # This covers both `SUPER + LEFT/RIGHT/UP/DOWN` and the backticked
+    # `` `SUPER + MINUS` / `SUPER + EQUAL` `` form, where only the first
+    # alternative carries the prefix and the rest are bare keys.
+    m = re.match(r"^(.*?\+)\s*([A-Z0-9]+(?:\s*/\s*[A-Z0-9`]+)+)\s*$", token)
+    if m:
+        pre, group = m.groups()
+        return [f"{pre} {alt.strip()}".strip() for alt in group.split("/")]
+
+    # Fallback: each alternative is written out in full.
+    parts = [p.strip().strip("`").strip() for p in token.split("/")]
+    parts = [p for p in parts if p]
+    return parts if len(parts) >= 2 else [token]
+
+
+def _parse_shortcut(raw: str) -> tuple[str, str] | None:
+    raw = raw.strip().strip("`").strip()
+    if not raw or raw in {"-", "—"}:
+        return None
+    parts = [p.strip().strip("`") for p in raw.split("+") if p.strip()]
+    if not parts:
+        return None
+    joined = " + ".join(parts)
+    key = KEY_ALIASES.get(joined, KEY_ALIASES.get(parts[-1], parts[-1]))
+    mods = parts[:-1]
+    order = {"SUPER": 0, "SHIFT": 1, "CTRL": 2, "ALT": 3}
+    mods.sort(key=lambda m: order.get(m, 9))
+    return (" + ".join(mods), key)
+
+
+def document_bindings(text: str) -> set[tuple[str, str]]:
+    """Extract the shortcut strings the document claims exist.
+
+    Only the first column of a table row is treated as a shortcut list, and only
+    when the row's second column looks like a real description. This keeps
+    prose, deferred-item rows and hardware-key tables from being misread as
+    bindings.
+    """
+    found: set[tuple[str, str]] = set()
+    deferred_section = False
+
+    for line in text.splitlines():
+        stripped = line.strip()
+
+        if stripped.startswith("#"):
+            deferred_section = "deferred" in stripped.lower()
+            continue
+
+        if not stripped.startswith("|"):
+            continue
+
+        cells = _row_cells(stripped)
+        if not cells or _is_separator(cells):
+            continue
+        if cells[0].lower() in {"shortcut", "gesture", "key", "requested", "action"}:
+            continue
+        # Deferred/unavailable rows describe bindings that do NOT exist.
+        if deferred_section:
+            continue
+        # A shortcut row has a description cell that is not a bare em dash.
+        if len(cells) < 2 or cells[1] in {"", "—"}:
+            continue
+
+        first = cells[0]
+        # A shortcut cell names at least one key. Rows such as the gesture
+        # table ("Three-finger swipe left/right") are not keybindings.
+        if not re.search(r"[A-Z0-9]", first):
+            continue
+        if not re.search(r"[A-Z0-9]{2,}", first):
+            continue
+
+        # Expand slash-joined alternatives first, then split the remainder on
+        # commas and "or". Splitting on "or" first would break
+        # "SUPER + LEFT/RIGHT/UP/DOWN" into unusable fragments.
+        for expanded in _expand_slashes(first):
+            for token in re.split(r",\s*|\s+or\s+", expanded):
+                token = token.strip().strip("`").strip()
+                if not token:
+                    continue
+                ranged = _expand_range(token)
+                if ranged is not None:
+                    for item in ranged:
+                        parsed = _parse_shortcut(item)
+                        if parsed:
+                            found.add(parsed)
+                    continue
+                parsed = _parse_shortcut(token)
+                if parsed:
+                    found.add(parsed)
+
+    return found
+
+
+def main() -> int:
+    doc_path = Path(
+        sys.argv[1]
+        if len(sys.argv) > 1
+        else "docs/ARCHTHER-HOTKEYS.md"
+    )
+    if not doc_path.is_file():
+        print(f"error: {doc_path} not found", file=sys.stderr)
+        return 1
+
+    text = doc_path.read_text(encoding="utf-8")
+    live = compositor_bindings()
+    documented = document_bindings(text)
+
+    print(f"compositor bindings: {len(live)}")
+    print(f"documented shortcuts: {len(documented)}")
+
+    problems: list[str] = []
+
+    # 3. Duplicate detection in the compositor itself.
+    seen: set[tuple[str, str]] = set()
+    for mods, key in live:
+        if (mods, key) in seen:
+            problems.append(f"DUPLICATE binding in compositor: {mods} + {key}")
+        seen.add((mods, key))
+
+    # 1. Everything the compositor has must be documented.
+    #    Hardware keys (Print, XF86*, mouse) are compared ignoring modifiers,
+    #    because the document lists them by key name in a dedicated table.
+    documented_keys = {key for _, key in documented}
+
+    def documented_any(modifiers: str, key: str) -> bool:
+        if (modifiers, key) in documented:
+            return True
+        return not modifiers and key in documented_keys
+
+    for mods, key in live:
+        if documented_any(mods, key):
+            continue
+        problems.append(f"UNDOCUMENTED: {' + '.join([mods, key]) if mods else key}")
+
+    # 2. Everything documented must exist.
+    for mods, key in sorted(documented):
+        if (mods, key) in seen:
+            continue
+        if not mods and key in {k for _, k in seen}:
+            # Documented as a hardware key; it exists with its own modifiers.
+            continue
+        problems.append(f"DOCUMENTED BUT NOT BOUND: {' + '.join([mods, key]) if mods else key}")
+
+    # 4. The stated total must be right.
+    m = re.search(r"(\d+)\s+bindings", text)
+    if m and int(m.group(1)) != len(live):
+        problems.append(
+            f"TOTAL MISMATCH: document says {m.group(1)}, compositor has {len(live)}"
+        )
+    else:
+        print(f"document total matches compositor ({len(live)})")
+
+    if problems:
+        print()
+        for p in problems:
+            print(f"  {p}")
+        print(f"\nFAIL: {len(problems)} problem(s)")
+        return 1
+
+    print("\nPASS: document and compositor agree")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
