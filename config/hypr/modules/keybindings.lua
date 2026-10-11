@@ -2,25 +2,36 @@
 -- one authorized fix: SUPER+R now launches Wofi instead of the missing
 -- "hyprlauncher" executable (see modules/variables.lua).
 -- Example binds, see https://wiki.hypr.land/Configuring/Basics/Binds/ for more
+--
+-- The Archther navigation shortcuts (SUPER+arrows with cursor following,
+-- SUPER+SHIFT+arrows swap, SUPER+T/P/F, resizing, the menu, the direct
+-- application launchers) live in modules/navigation.lua, which this file does
+-- not require: the entry point loads it. The few bindings removed here were
+-- moved there, not deleted, so there is exactly one definition per key:
+--
+--   SUPER+arrows  moved to navigation.lua (focus + cursor follow)
+--   SUPER+P       moved to navigation.lua (pseudo, explicit toggle action)
+--   SUPER+Q       reassigned from "launch kitty" to "close window"; the
+--                 terminal shortcut is preserved as SUPER+RETURN
+--
+-- SUPER+J (split orientation) and SUPER+V (toggle float) stay here because they
+-- predate the navigation work; navigation.lua deliberately does not rebind
+-- them, so the working originals are untouched.
 
 local vars = require("modules.variables")
 local mainMod = vars.mainMod -- Sets "Windows" key as main modifier
 
-hl.bind(mainMod .. " + Q", hl.dsp.exec_cmd(vars.terminal))
-local closeWindowBind = hl.bind(mainMod .. " + C", hl.dsp.window.close())
--- closeWindowBind:set_enabled(false)
 hl.bind(mainMod .. " + M", hl.dsp.exec_cmd("command -v hyprshutdown >/dev/null 2>&1 && hyprshutdown || hyprctl dispatch 'hl.dsp.exit()'"))
 hl.bind(mainMod .. " + E", hl.dsp.exec_cmd(vars.fileManager))
 hl.bind(mainMod .. " + V", hl.dsp.window.float({ action = "toggle" }))
 hl.bind(mainMod .. " + R", hl.dsp.exec_cmd(vars.menu))
-hl.bind(mainMod .. " + P", hl.dsp.window.pseudo())
 hl.bind(mainMod .. " + J", hl.dsp.layout("togglesplit"))    -- dwindle only
 
--- Move focus with mainMod + arrow keys
-hl.bind(mainMod .. " + left",  hl.dsp.focus({ direction = "left" }))
-hl.bind(mainMod .. " + right", hl.dsp.focus({ direction = "right" }))
-hl.bind(mainMod .. " + up",    hl.dsp.focus({ direction = "up" }))
-hl.bind(mainMod .. " + down",  hl.dsp.focus({ direction = "down" }))
+-- Close the active window. SUPER+C previously did this; both are kept because
+-- both were requested and neither displaces another working binding.
+-- SUPER+W is bound in navigation.lua.
+hl.bind(mainMod .. " + Q", hl.dsp.window.close())
+hl.bind(mainMod .. " + C", hl.dsp.window.close())
 
 -- Switch workspaces with mainMod + [0-9]
 -- Move active window to a workspace with mainMod + SHIFT + [0-9]
